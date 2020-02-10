@@ -1,0 +1,58 @@
+version: '3'
+
+services:
+  registry:
+    image: registry:2.7
+    restart: always
+    container_name: registry
+    expose:
+      - "5000"
+    ports:
+      - 5000:5000
+      - 5001:5001 # required to access debug service
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      REGISTRY_HTTP_HOST: 0.0.0.0
+      REGISTRY_HTTP_ADDR: :5000
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: "Registry Realm"      
+      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/cert.crt
+      REGISTRY_HTTP_TLS_KEY: /certs/cert.key
+    volumes:
+      - ./auth:/auth
+      - ./data:/var/lib/registry
+      - ./certs/docker.testing.com:/certs
+      - ./registry/config.yml:/etc/docker/registry/config.yml:ro
+      - ./registry/init:/etc/docker/registry/init:ro
+  registry-ui:
+    image: quiq/docker-registry-ui:latest
+    container_name: registry-ui
+    ports:
+      - "8000"
+    volumes:
+      - "./registry-ui/data/:/opt/data/"
+      - "./registry-ui/index.yml:/opt/config.yml"
+    links:
+      - registry
+  proxy:
+    image: nginx
+    container_name: proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    expose:
+      - "80"
+      - "443"
+    environment:
+      VIRTUAL_HOST: 0.0.0.0
+      VIRTUAL_PORT: 80
+    volumes:
+      - ./certs/docker.testing.com:/etc/nginx/certs
+      - ./nginx/conf.d/proxy-ui.conf:/etc/nginx/conf.d/proxy.conf
+    depends_on:
+      - registry
+      - registry-ui
+    links:
+      - registry
+      - registry-ui      
+    restart: always
